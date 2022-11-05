@@ -1,0 +1,12 @@
+# Arquivos de Ambiente Virtual
+pyvenv/
+
+# Arquivos de Módulos e Cache
+modules/__pycache__/
+
+# Arquivos de Dados de Teste
+test/
+out/
+
+# Arquivos de log
+.ipynb_checkpoints
