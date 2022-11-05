@@ -3,6 +3,7 @@ pyvenv/
 
 # Arquivos de Módulos e Cache
 modules/__pycache__/
+.vscode/
 
 # Arquivos de Dados de Teste
 test/
