@@ -49,7 +49,6 @@ class LinearProgram:
             self.__rest_M = np.delete(self.__rest_M, -1, 1)
             self.__rest_M = np.concatenate((self.__rest_M, newRests), axis=1)
 
-
     def getSimplexMode(self) -> bool:
         self.__isDual__()
         return self.__is_dual
@@ -71,8 +70,6 @@ class LinearProgram:
             else:
                 self.__is_dual = True
 
-
-
     def __str__(self) -> str:
         return (f"""
 ---------------------------------------------
@@ -87,21 +84,44 @@ class LinearProgram:
         """)
 
 
-
 class Simplex:
     """
     @brief Para modos de praticidade, o algoritmo simplex será representado como uma classe dentro do programa. Ele recebe uma PL já em FPI, verifica qual método deverá ser seguido para calcular o ótimo e executa o algoritmo.
 
     @param lp: A PL a ser trabalhada
     """
+
     def __init__(self, lp: LinearProgram) -> None:
         self.__lp = lp
 
-    def runSimplex(self):
+    def __isOptimal__(self) -> bool:
+        for i in self.__lp.__cost_vector:
+            if i >= 0:
+                return False
+
+        else:
+            return True
+
+    def __findMaxCostIndex__(self) -> int:
+        maxItem = np.amax(self.__lp.__cost_vector)
+        indexMax = np.where(self.__lp.__cost_vector == maxItem)[0][0]
+        return indexMax
+
+    def __pivot__(self, iMax: int) -> None:
+        '''
+        @TODO Encontrar indice do maior elemento do vetor de custos
+        @TODO Encontrar, na coluna do maior elemento b que minimiza: b/A_jk, A_jk > 0.
+        @TODO Divide aquela linha toda pelo valor do elemento b
+        @TODO zerar a coluna:(fazer copia da linha de b, somar a linha do outro elemento com -1 * valor do elemento da coluna de b)
+        '''
         pass
 
-    def primalSimplex(self):
-        pass
+
+    def runSimplex(self):
+        while not self.__isOptimal__():
+            iMax = self.__findMaxCostIndex__()
+            self.__pivot__(iMax)
+            
 
     def dualSimplex(self):
         pass
