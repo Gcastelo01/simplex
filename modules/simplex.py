@@ -18,11 +18,11 @@ class LinearProgram:
     def __init__(self, nVars: int, nRest: int, costV: np.ndarray, resM: np.ndarray) -> None:
 
         self.__n_var = nVars
-        self.__n_rest = nRest
-        self.__cost_vector = costV
-        self.__rest_M = resM
-        self.__rest_results = np.zeros([nRest])
-        self.__is_dual = False
+        self.n_rest = nRest
+        self.cost_vector = costV
+        self.rest_M = resM
+        self.rest_results = np.zeros([nRest])
+        self.is_dual = False
         self.__fpiMade = False
 
     def makeFPI(self) -> None:
@@ -35,29 +35,29 @@ class LinearProgram:
         if not self.__fpiMade:
             self.__fpiMade = True
 
-            newCosts = np.zeros(self.__n_rest)
-            self.__cost_vector = np.concatenate(
-                (self.__cost_vector, newCosts), axis=None)
+            newCosts = np.zeros(self.n_rest)
+            self.cost_vector = np.concatenate(
+                (self.cost_vector, newCosts), axis=None)
 
             # Adicionando novas variáveis à matriz de restrições
-            newRests = np.zeros((self.__n_rest, self.__n_rest))
+            newRests = np.zeros((self.n_rest, self.n_rest))
 
-            for i in range(self.__n_rest):
+            for i in range(self.n_rest):
                 newRests[i][i] = 1
 
-            self.__rest_results = np.array([self.__rest_M[:, -1]])
-            self.__rest_M = np.delete(self.__rest_M, -1, 1)
-            self.__rest_M = np.concatenate((self.__rest_M, newRests), axis=1)
+            self.rest_results = np.array([self.rest_M[:, -1]])
+            self.rest_M = np.delete(self.rest_M, -1, 1)
+            self.rest_M = np.concatenate((self.rest_M, newRests), axis=1)
 
     def getSimplexMode(self) -> bool:
         self.__isDual__()
-        return self.__is_dual
+        return self.is_dual
 
     def __isDual__(self):
-        tableauHead = self.__cost_vector.dot(-1)
+        tableauHead = self.cost_vector.dot(-1)
         negVars = False
 
-        for i in self.__rest_results[0]:
+        for i in self.rest_results[0]:
             if i < 0:
                 negVars = True
                 break
@@ -65,21 +65,21 @@ class LinearProgram:
         if negVars:
             for i in tableauHead:
                 if i < 0:
-                    self.__is_dual = False
+                    self.is_dual = False
                     break
             else:
-                self.__is_dual = True
+                self.is_dual = True
 
     def __str__(self) -> str:
         return (f"""
 ---------------------------------------------
 | INFORMAÇÕES DA PROGRAMAÇÃO LINEAR| \n
 - Número de variáveis: {self.__n_var};\n
-- Número de Restrições: {self.__n_rest} \n
-- Vetor de Custos: {self.__cost_vector} \n
-- Vetor de Resultados: {self.__rest_results}\n
+- Número de Restrições: {self.n_rest} \n
+- Vetor de Custos: {self.cost_vector} \n
+- Vetor de Resultados: {self.rest_results}\n
 - Usar Simplex Dual? {self.getSimplexMode()} \n
-- Matriz de Restrições: \n {self.__rest_M} \n
+- Matriz de Restrições: \n {self.rest_M} \n
 ----------------------------------------------
         """)
 
@@ -93,38 +93,80 @@ class Simplex:
 
     def __init__(self, lp: LinearProgram) -> None:
         self.__lp = lp
+        self.__VERO = None
 
     def __isOptimal__(self) -> bool:
-        for i in self.__lp.__cost_vector:
+        for i in self.__lp.cost_vector:
             if i >= 0:
                 return False
-
         else:
             return True
 
     def __findMaxCostIndex__(self) -> int:
-        maxItem = np.amax(self.__lp.__cost_vector)
-        indexMax = np.where(self.__lp.__cost_vector == maxItem)[0][0]
+        maxItem = np.amax(self.__lp.cost_vector)
+        indexMax = np.where(self.__lp.cost_vector == maxItem)[0][0]
         return indexMax
+
+    def __findMinFormCol__(self, column: np.ndarray) -> int:
+        result = column / self.__lp.rest_results
+        small = result[0]
+        small_idx = 0
+
+        for idx, element in enumerate(self.__lp.rest_results):
+            if element > 0:
+                if result[idx] < small:
+                    small = result[idx]
+                    small_idx = idx
+
+        return (small, small_idx)
 
     def __pivot__(self, iMax: int) -> None:
         '''
-        @TODO Encontrar indice do maior elemento do vetor de custos
-        @TODO Encontrar, na coluna do maior elemento b que minimiza: b/A_jk, A_jk > 0.
-        @TODO Divide aquela linha toda pelo valor do elemento b
-        @TODO zerar a coluna:(fazer copia da linha de b, somar a linha do outro elemento com -1 * valor do elemento da coluna de b)
+        @TODO Encontrar indice do maior elemento do vetor de custos; ok
+        @TODO Encontrar, na coluna do maior elemento b que minimiza: b/A_jk, A_jk > 0. ok
+        @TODO Divide aquela linha toda pelo valor do elemento b; ok
+
+        @TODO zerar a coluna:(fazer copia da linha de b, somar a linha do outro elemento com -1 * valor do elemento da coluna de b); ok
         '''
-        pass
+
+        # Pego a coluna referente às restrições
+        ColumnCopy = self.__lp.rest_M[:, iMax]
+        
+        # Descubro qual restrição deverá ser pivoteada
+        small, small_idx = self.__findMinFormCol__(ColumnCopy)
+
+        # Pivoteio a resrtição (no caso, deixo o valor como 1.)
+        self.__lp.rest_M[small_idx] = self.__lp.rest_M[small_idx] / small
+        
+        self.__VERO[small_idx] = self.__VERO[small_idx] / small  # Espelhando as operações no VERO
+
+        for i in range(self.__lp.n_rest):
+            if i != small_idx:
+                toBeNull = self.__lp.rest_M[i][iMax]
+                
+                self.__lp.rest_M[i] = self.__lp.rest_M[i] + (-1 * toBeNull * self.__lp.rest_M[i])
+                self.__lp.rest_results[i] = self.__lp.rest_results[i] + (-1 * toBeNull * self.__lp.rest_results[i])
+                self.__VERO[i] = self.__VERO[i] + (-1 * toBeNull * self.__VERO[i])
+                self.__lp.rest_results
+                print(self.__lp)
+                input('Pressione Qualquer tecla para continuar...')
+
+        toBeNull = self.__lp.cost_vector[iMax]
+        self.__lp.cost_vector[iMax] = self.__lp.cost_vector[iMax] + (-1 * toBeNull * self.__lp.cost_vector[iMax])
 
 
-    def runSimplex(self):
+    def __startVero__(self) -> None:
+        self.__VERO = np.zeros((self.__lp.n_rest, self.__lp.n_rest))
+
+        for i in range(self.__lp.n_rest):
+            self.__VERO[i][i] = 1
+
+    def runSimplex(self) -> None:
+        self.__startVero__()
+
         while not self.__isOptimal__():
             iMax = self.__findMaxCostIndex__()
             self.__pivot__(iMax)
-            
 
     def dualSimplex(self):
-        pass
-
-    def auxLinearProgram(self):
         pass
