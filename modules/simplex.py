@@ -1,5 +1,5 @@
 import numpy as np
-
+from time import sleep
 
 class LinearProgram:
     """
@@ -71,10 +71,13 @@ class Simplex:
     def __init__(self, lp: LinearProgram) -> None:
         self.__lp = lp
         self.__VERO = None
+        self.__certificate = np.zeros(lp.n_rest)
+        self.__objValue = 0
+        self.__baseVars = []
 
     def __isOptimal__(self) -> bool:
         for i in self.__lp.cost_vector:
-            if i >= 0:
+            if i > 0:
                 return False
         else:
             return True
@@ -85,29 +88,18 @@ class Simplex:
         return indexMax
 
     def __findMinFormCol__(self, column: np.ndarray) -> int:
-      
-      for i, e in enumerate(self.__lp.rest_results):
-        if i > 0:
-          small = e
-          small_idx = i
-          break
-        
-      for idx, element in enumerate(self.__lp.rest_results):
+      small = -1
+      small_idx = 0
+
+      for idx, element in enumerate(column):
           if element > 0:
-              if column[idx] < small:
+              if column[idx] < small or small < 0:
                   small = column[idx]
                   small_idx = idx
 
       return (small, small_idx)
 
     def __pivot__(self, iMax: int) -> None:
-        '''
-        @TODO Encontrar indice do maior elemento do vetor de custos; ok
-        @TODO Encontrar, na coluna do maior elemento b que minimiza: b/A_jk, A_jk > 0. ok
-        @TODO Divide aquela linha toda pelo valor do elemento b; ok
-
-        @TODO zerar a coluna:(fazer copia da linha de b, somar a linha do outro elemento com -1 * valor do elemento da coluna de b); ok
-        '''
 
         # Pego a coluna referente às restrições
         ColumnCopy = self.__lp.rest_M[:, iMax]
@@ -117,12 +109,13 @@ class Simplex:
 
         # Pivoteio a resrtição (no caso, deixo o valor como 1.)
         self.__lp.rest_M[small_idx] = self.__lp.rest_M[small_idx] / small
+        self.__lp.rest_results[small_idx] = self.__lp.rest_results[small_idx] / small
 
         self.__VERO[small_idx] = self.__VERO[small_idx] / \
             small  # Espelhando as operações no VERO
 
-        print(self.__lp)
 
+        # Zerando Colunas acima e abaixo do valor Pivoteado, na matriz de Restrições.
         for i in range(self.__lp.n_rest):
             if i != small_idx:
                 toBeNull = self.__lp.rest_M[i][iMax]
@@ -134,19 +127,25 @@ class Simplex:
                 self.__VERO[i] = self.__VERO[i] + \
                     (-1 * toBeNull * self.__VERO[i])
 
-                # self.__lp.rest_results
 
-                print(self.__lp)
 
-        toBeNull = self.__lp.cost_vector[iMax]
-        self.__lp.cost_vector[iMax] = self.__lp.cost_vector[iMax] + \
-            (-1 * toBeNull * self.__lp.cost_vector[iMax])
+        toBeNull = self.__lp.cost_vector[iMax]  # Pegando o valor do elemento do vetor de custos a ser anulado.
+
+        self.__lp.cost_vector = self.__lp.cost_vector + \
+            (-1 * toBeNull * self.__lp.rest_M[iMax])  # Anulando o vetor de custos no ponto.
+
+
+        self.__certificate = self.__certificate - (toBeNull * self.__VERO[iMax])  # Repetindo as operações no VERO e no certificado;
+    
+        self.__objValue = self.__objValue - (self.__lp.rest_results[iMax] * toBeNull)
+
 
     def __startVero__(self) -> None:
         self.__VERO = np.zeros((self.__lp.n_rest, self.__lp.n_rest))
 
         for i in range(self.__lp.n_rest):
             self.__VERO[i][i] = 1
+
 
     def runSimplex(self) -> None:
         self.__startVero__()
@@ -155,5 +154,27 @@ class Simplex:
             iMax = self.__findMaxCostIndex__()
             self.__pivot__(iMax)
 
+        self.__certificate = self.__certificate * -1
+        self.__objValue = self.__objValue * -1
+
+        for i in range(self.__lp.n_rest):
+            if(self.__lp.cost_vector[i]) == 0:
+                self.__baseVars.append(i+1)
+
     def dualSimplex(self):
         pass
+
+    def __str__(self) -> str:
+        a = f"""
+        ---------- | SIMPLEX RESULTS | ----------
+          -> Valor Objetivo: {self.__objValue}
+          -> Certificado: {self.__certificate}
+          -> Variáveis Básicas: {self.__baseVars}
+
+        1. Otima
+        2. {self.__objValue}
+        3. {self.__certificate}
+
+        """
+
+        return a
