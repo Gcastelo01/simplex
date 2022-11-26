@@ -45,30 +45,9 @@ class LinearProgram:
             for i in range(self.n_rest):
                 newRests[i][i] = 1
 
-            self.rest_results = np.array([self.rest_M[:, -1]])
+            self.rest_results = np.array(self.rest_M[:, -1])
             self.rest_M = np.delete(self.rest_M, -1, 1)
             self.rest_M = np.concatenate((self.rest_M, newRests), axis=1)
-
-    def getSimplexMode(self) -> bool:
-        self.__isDual__()
-        return self.is_dual
-
-    def __isDual__(self):
-        tableauHead = self.cost_vector.dot(-1)
-        negVars = False
-
-        for i in self.rest_results[0]:
-            if i < 0:
-                negVars = True
-                break
-
-        if negVars:
-            for i in tableauHead:
-                if i < 0:
-                    self.is_dual = False
-                    break
-            else:
-                self.is_dual = True
 
     def __str__(self) -> str:
         return (f"""
@@ -78,7 +57,6 @@ class LinearProgram:
 - Número de Restrições: {self.n_rest} \n
 - Vetor de Custos: {self.cost_vector} \n
 - Vetor de Resultados: {self.rest_results}\n
-- Usar Simplex Dual? {self.getSimplexMode()} \n
 - Matriz de Restrições: \n {self.rest_M} \n
 ----------------------------------------------
         """)
@@ -90,7 +68,6 @@ class Simplex:
 
     @param lp: A PL a ser trabalhada
     """
-
     def __init__(self, lp: LinearProgram) -> None:
         self.__lp = lp
         self.__VERO = None
@@ -108,17 +85,20 @@ class Simplex:
         return indexMax
 
     def __findMinFormCol__(self, column: np.ndarray) -> int:
-        result = column / self.__lp.rest_results
-        small = result[0]
-        small_idx = 0
+      
+      for i, e in enumerate(self.__lp.rest_results):
+        if i > 0:
+          small = e
+          small_idx = i
+          break
+        
+      for idx, element in enumerate(self.__lp.rest_results):
+          if element > 0:
+              if column[idx] < small:
+                  small = column[idx]
+                  small_idx = idx
 
-        for idx, element in enumerate(self.__lp.rest_results):
-            if element > 0:
-                if result[idx] < small:
-                    small = result[idx]
-                    small_idx = idx
-
-        return (small, small_idx)
+      return (small, small_idx)
 
     def __pivot__(self, iMax: int) -> None:
         '''
@@ -131,29 +111,36 @@ class Simplex:
 
         # Pego a coluna referente às restrições
         ColumnCopy = self.__lp.rest_M[:, iMax]
-        
+
         # Descubro qual restrição deverá ser pivoteada
         small, small_idx = self.__findMinFormCol__(ColumnCopy)
 
         # Pivoteio a resrtição (no caso, deixo o valor como 1.)
         self.__lp.rest_M[small_idx] = self.__lp.rest_M[small_idx] / small
-        
-        self.__VERO[small_idx] = self.__VERO[small_idx] / small  # Espelhando as operações no VERO
+
+        self.__VERO[small_idx] = self.__VERO[small_idx] / \
+            small  # Espelhando as operações no VERO
+
+        print(self.__lp)
 
         for i in range(self.__lp.n_rest):
             if i != small_idx:
                 toBeNull = self.__lp.rest_M[i][iMax]
-                
-                self.__lp.rest_M[i] = self.__lp.rest_M[i] + (-1 * toBeNull * self.__lp.rest_M[i])
-                self.__lp.rest_results[i] = self.__lp.rest_results[i] + (-1 * toBeNull * self.__lp.rest_results[i])
-                self.__VERO[i] = self.__VERO[i] + (-1 * toBeNull * self.__VERO[i])
-                self.__lp.rest_results
+
+                self.__lp.rest_M[i] = self.__lp.rest_M[i] + \
+                    (-1 * toBeNull * self.__lp.rest_M[i])
+                self.__lp.rest_results[i] = self.__lp.rest_results[i] + \
+                    (-1 * toBeNull * self.__lp.rest_results[i])
+                self.__VERO[i] = self.__VERO[i] + \
+                    (-1 * toBeNull * self.__VERO[i])
+
+                # self.__lp.rest_results
+
                 print(self.__lp)
-                input('Pressione Qualquer tecla para continuar...')
 
         toBeNull = self.__lp.cost_vector[iMax]
-        self.__lp.cost_vector[iMax] = self.__lp.cost_vector[iMax] + (-1 * toBeNull * self.__lp.cost_vector[iMax])
-
+        self.__lp.cost_vector[iMax] = self.__lp.cost_vector[iMax] + \
+            (-1 * toBeNull * self.__lp.cost_vector[iMax])
 
     def __startVero__(self) -> None:
         self.__VERO = np.zeros((self.__lp.n_rest, self.__lp.n_rest))

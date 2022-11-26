@@ -6,7 +6,7 @@ modules/__pycache__/
 .vscode/
 
 # Arquivos de Dados de Teste
-test/
+# test/
 out/
 
 # Arquivos de log
