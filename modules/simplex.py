@@ -21,7 +21,7 @@ class LinearProgram:
         self.n_rest = nRest
         self.cost_vector = costV
         self.rest_M = resM
-        self.rest_results = np.zeros([nRest])
+        self.rest_results = np.zeros([nRest], dtype=np.float128)
         self.is_dual = False
         self.__fpiMade = False
 
@@ -71,7 +71,7 @@ class Simplex:
     def __init__(self, lp: LinearProgram) -> None:
         self.__lp = lp
         self.__VERO = None
-        self.__certificate = np.zeros(lp.n_rest)
+        self.__certificate = np.zeros(lp.n_rest, dtype=np.float128)
         self.__objValue = 0
         self.__baseVars = []
         self.__possibleResult = np.zeros(lp.n_var)
@@ -121,32 +121,32 @@ class Simplex:
         # Descubro qual restrição deverá ser pivoteada
         small, small_idx = self.__findMinFormCol__(ColumnCopy)
 
-        # Pivoteio a resrtição (no caso, deixo o valor como 1.)
+        # Pivoteio a restrição (no caso, deixo o valor como 1.)
         self.__lp.rest_M[small_idx] = self.__lp.rest_M[small_idx] / small
+
+        # Repetindo a operação no vetor de resultados
         self.__lp.rest_results[small_idx] = self.__lp.rest_results[small_idx] / small
 
-        self.__VERO[small_idx] = self.__VERO[small_idx] / \
-            small  # Espelhando as operações no VERO
+        # Repetindo a operação no VERO
+        self.__VERO[small_idx] = self.__VERO[small_idx] / small  # Espelhando as operações no VERO
 
 
         # Zerando Colunas acima e abaixo do valor Pivoteado, na matriz de Restrições.
         for i in range(self.__lp.n_rest):
             if i != small_idx:
                 toBeNull = self.__lp.rest_M[i][iMax]
+                if toBeNull < 0: toBeNull = toBeNull * -1
 
                 self.__lp.rest_M[i] = self.__lp.rest_M[i] + \
                     (-1 * toBeNull * self.__lp.rest_M[i])
-                self.__lp.rest_results[i] = self.__lp.rest_results[i] + \
-                    (-1 * toBeNull * self.__lp.rest_results[i])
-                self.__VERO[i] = self.__VERO[i] + \
-                    (-1 * toBeNull * self.__VERO[i])
-
 
 
         toBeNull = self.__lp.cost_vector[iMax]  # Pegando o valor do elemento do vetor de custos a ser anulado.
+        if toBeNull < 0: toBeNull = toBeNull * -1
 
-        self.__lp.cost_vector = self.__lp.cost_vector + \
-            (-1 * toBeNull * self.__lp.rest_M[iMax])  # Anulando o vetor de custos no ponto.
+
+        self.__lp.cost_vector = self.__lp.cost_vector - \
+             (toBeNull * self.__lp.cost_vector[iMax])  # Anulando o vetor de custos no ponto.
 
 
         self.__certificate = self.__certificate - (toBeNull * self.__VERO[iMax])  # Repetindo as operações no VERO e no certificado;
@@ -184,6 +184,7 @@ class Simplex:
                 self.__kind = 'ilimitada'
                 break
             self.__pivot__(iMax)
+            print(self.__lp)
 
         # Invertendo o valor objetivo
         self.__objValue = self.__objValue * -1
@@ -214,8 +215,8 @@ class Simplex:
             a = f"""
         1. {self.__kind}
         2. {self.__objValue}
+        4. {self.__lp.rest_results}
         3. {self.__certificate}
-        4. {self.__lp.cost_vector}
 
         """
 
