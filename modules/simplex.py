@@ -17,7 +17,7 @@ class LinearProgram:
 
     def __init__(self, nVars: int, nRest: int, costV: np.ndarray, resM: np.ndarray) -> None:
 
-        self.__n_var = nVars
+        self.n_var = nVars
         self.n_rest = nRest
         self.cost_vector = costV
         self.rest_M = resM
@@ -53,7 +53,7 @@ class LinearProgram:
         return (f"""
 ---------------------------------------------
 | INFORMAÇÕES DA PROGRAMAÇÃO LINEAR| \n
-- Número de variáveis: {self.__n_var};\n
+- Número de variáveis: {self.n_var};\n
 - Número de Restrições: {self.n_rest} \n
 - Vetor de Custos: {self.cost_vector} \n
 - Vetor de Resultados: {self.rest_results}\n
@@ -74,6 +74,8 @@ class Simplex:
         self.__certificate = np.zeros(lp.n_rest)
         self.__objValue = 0
         self.__baseVars = []
+        self.__possibleResult = np.zeros(lp.n_var)
+        self.__kind = 'otima'
 
     def __isOptimal__(self) -> bool:
         for i in self.__lp.cost_vector:
@@ -81,6 +83,18 @@ class Simplex:
                 return False
         else:
             return True
+
+    def __checkIlimited__(self, indexToTest) -> bool:
+        """
+        Sempre que todos os coeficientes da coluna correspondente de uma variavel candidata forem não-positivos (ou sejam negativos ou zero), a PL é ilimitada.
+        """
+        toBeTested = self.__lp.rest_M[:, indexToTest]
+
+        for i in toBeTested:
+            if i > 0: 
+                return False
+
+        return True
 
     def __findMaxCostIndex__(self) -> int:
         maxItem = np.amax(self.__lp.cost_vector)
@@ -139,40 +153,76 @@ class Simplex:
     
         self.__objValue = self.__objValue - (self.__lp.rest_results[iMax] * toBeNull)
 
-
     def __startVero__(self) -> None:
         self.__VERO = np.zeros((self.__lp.n_rest, self.__lp.n_rest))
 
         for i in range(self.__lp.n_rest):
             self.__VERO[i][i] = 1
 
+    def __getPossible__(self, idx: int) -> int:
+        """
+        @brief Verifica se um determinado valor arbitrário é parte de uma base de soluções viáveis
+        """
+        col = self.__lp.rest_M[:, idx]
+        for idx, i in enumerate(col):
+            if i == 1:
+                return self.__lp.rest_results[idx]
+        else:
+            return 'none'
 
     def runSimplex(self) -> None:
+        """
+        @brief Roda o Algoritmo Simplex para a PL parâmetro. Esta chamada automaticamente determina a necessidade de gerar uma PL auxiliar, de rodar o simplex dual ou quaisquer outros ajustes.
+        """
+        # Começa a matriz de registro de operações.
         self.__startVero__()
 
+        # Enquanto a matriz não for ótima, escolho um elemento e pivoteio.
         while not self.__isOptimal__():
             iMax = self.__findMaxCostIndex__()
+            if self.__checkIlimited__(iMax):
+                self.__kind = 'ilimitada'
+                break
             self.__pivot__(iMax)
 
-        self.__certificate = self.__certificate * -1
+        # Invertendo o valor objetivo
         self.__objValue = self.__objValue * -1
 
+        # Invertendo o valor do vetor certificado
+        self.__certificate = self.__certificate * -1
+
+        # Criando um vetor com as variáveis básicas 
         for i in range(self.__lp.n_rest):
             if(self.__lp.cost_vector[i]) == 0:
                 self.__baseVars.append(i+1)
+
+        # Se a PL for ilimitada, cria um vetor com um resultado possível.
+        if self.__kind == 'ilimitada':
+            self.__certificate = self.__certificate * -1
+            for i in range(self.__lp.n_var):
+                if(self.__lp.cost_vector[i] == 0):
+                    self.__possibleResult[i] = self.__getPossible__(i)
+
+                else: 
+                    self.__possibleResult[i] = 0
 
     def dualSimplex(self):
         pass
 
     def __str__(self) -> str:
-        a = f"""
-        ---------- | SIMPLEX RESULTS | ----------
-          -> Valor Objetivo: {self.__objValue}
-          -> Certificado: {self.__certificate}
-          -> Variáveis Básicas: {self.__baseVars}
-
-        1. Otima
+        if self.__kind == 'otima':
+            a = f"""
+        1. {self.__kind}
         2. {self.__objValue}
+        3. {self.__certificate}
+        4. {self.__lp.cost_vector}
+
+        """
+
+        elif self.__kind == 'ilimitada':
+            a = f"""
+        1. {self.__kind}
+        2. {self.__possibleResult}
         3. {self.__certificate}
 
         """
