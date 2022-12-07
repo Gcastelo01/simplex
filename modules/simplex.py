@@ -76,6 +76,7 @@ class Simplex:
         self.__baseVars = []
         self.__possibleResult = np.zeros(lp.n_var)
         self.__kind = 'otima'
+        self.__isDual = False
 
     def __isOptimal__(self) -> bool:
         for i in self.__lp.cost_vector:
@@ -122,36 +123,28 @@ class Simplex:
         small, small_idx = self.__findMinFormCol__(ColumnCopy)
 
         # Pivoteio a restrição (no caso, deixo o valor como 1.)
-        self.__lp.rest_M[small_idx] = self.__lp.rest_M[small_idx] / small
-
+        self.__lp.rest_M[small_idx] /= small
         # Repetindo a operação no vetor de resultados
-        self.__lp.rest_results[small_idx] = self.__lp.rest_results[small_idx] / small
-
+        self.__lp.rest_results[small_idx] /= small
         # Repetindo a operação no VERO
-        self.__VERO[small_idx] = self.__VERO[small_idx] / small  # Espelhando as operações no VERO
-
+        self.__VERO[small_idx] /= small
 
         # Zerando Colunas acima e abaixo do valor Pivoteado, na matriz de Restrições.
         for i in range(self.__lp.n_rest):
             if i != small_idx:
                 toBeNull = self.__lp.rest_M[i][iMax]
-                if toBeNull < 0: toBeNull = toBeNull * -1
-
-                self.__lp.rest_M[i] = self.__lp.rest_M[i] + \
-                    (-1 * toBeNull * self.__lp.rest_M[i])
-
+                self.__lp.rest_M[i] -= (toBeNull * self.__lp.rest_M[small_idx])
+                self.__lp.rest_results[i] -= (toBeNull * self.__lp.rest_results[small_idx])
+                self.__VERO[i] -= (toBeNull * self.__VERO[small_idx]) # Repetindo no VERO
+                
 
         toBeNull = self.__lp.cost_vector[iMax]  # Pegando o valor do elemento do vetor de custos a ser anulado.
-        if toBeNull < 0: toBeNull = toBeNull * -1
 
+        self.__lp.cost_vector -= (toBeNull * self.__lp.rest_M[iMax])  # Anulando o vetor de custos no ponto.
 
-        self.__lp.cost_vector = self.__lp.cost_vector - \
-             (toBeNull * self.__lp.cost_vector[iMax])  # Anulando o vetor de custos no ponto.
-
-
-        self.__certificate = self.__certificate - (toBeNull * self.__VERO[iMax])  # Repetindo as operações no VERO e no certificado;
+        self.__certificate -= (toBeNull * self.__VERO[iMax])  # Repetindo as operações no VERO e no certificado;
     
-        self.__objValue = self.__objValue - (self.__lp.rest_results[iMax] * toBeNull)
+        self.__objValue -= (self.__lp.rest_results[iMax] * toBeNull)  # Atualizando valor
 
     def __startVero__(self) -> None:
         self.__VERO = np.zeros((self.__lp.n_rest, self.__lp.n_rest))
@@ -174,9 +167,10 @@ class Simplex:
         """
         @brief Roda o Algoritmo Simplex para a PL parâmetro. Esta chamada automaticamente determina a necessidade de gerar uma PL auxiliar, de rodar o simplex dual ou quaisquer outros ajustes.
         """
+        
         # Começa a matriz de registro de operações.
         self.__startVero__()
-
+        
         # Enquanto a matriz não for ótima, escolho um elemento e pivoteio.
         while not self.__isOptimal__():
             iMax = self.__findMaxCostIndex__()
@@ -184,38 +178,52 @@ class Simplex:
                 self.__kind = 'ilimitada'
                 break
             self.__pivot__(iMax)
-            print(self.__lp)
 
+        print(self.__lp)
+          
         # Invertendo o valor objetivo
         self.__objValue = self.__objValue * -1
-
+        
         # Invertendo o valor do vetor certificado
         self.__certificate = self.__certificate * -1
 
-        # Criando um vetor com as variáveis básicas 
-        for i in range(self.__lp.n_rest):
-            if(self.__lp.cost_vector[i]) == 0:
-                self.__baseVars.append(i+1)
 
+        if self.__objValue < 0:
+          self.__kind = 'inviavel'
+          pass
+        
+        if self.__kind == 'otima':
+          for i in range(self.__lp.n_var):
+            
+            if self.__lp.cost_vector[i] == 0:
+              self.__baseVars.append(self.__lp.rest_results[i])
+              
+            else:
+              self.__baseVars.append(0)
+        
         # Se a PL for ilimitada, cria um vetor com um resultado possível.
         if self.__kind == 'ilimitada':
             self.__certificate = self.__certificate * -1
             for i in range(self.__lp.n_var):
                 if(self.__lp.cost_vector[i] == 0):
                     self.__possibleResult[i] = self.__getPossible__(i)
-
                 else: 
                     self.__possibleResult[i] = 0
-
-    def dualSimplex(self):
-        pass
-
+      
+    def testCertificate(self):
+      if self.__kind == 'otima':
+        y = self.__certificate
+        b = self.__lp.rest_results
+        c = self.__lp.cost_vector
+        z = self.__lp.rest_results
+        print(f"Vetor de Custo: {c[self.__lp.n_var:].T}\n yTb: {y.T @ b}\n cTz: {c[self.__lp.n_var:].T @ z} \n z: {z}")
+        
     def __str__(self) -> str:
         if self.__kind == 'otima':
             a = f"""
         1. {self.__kind}
         2. {self.__objValue}
-        4. {self.__lp.rest_results}
+        4. {self.__baseVars}
         3. {self.__certificate}
 
         """
@@ -227,5 +235,11 @@ class Simplex:
         3. {self.__certificate}
 
         """
+        
+        else:
+          a = f"""
+        1. {self.__kind}
+        3. {self.__certificate}
+          """
 
         return a
